@@ -32,6 +32,7 @@ export default function Tracking() {
     state: '',
   });
   const [subscriptionId, setSubscriptionId] = useState<number | null>(null);
+  const [showAlertText, setShowAlertText] = useState<boolean>(true);
   useEffect(() => {
     return () => {
       clearWatch();
@@ -117,6 +118,8 @@ export default function Tracking() {
                     state: data.results[0].components.state,
                     city: data.results[0].components.city,
                   });
+                  getDatafromBackend();
+                  console.log('data sent to backend');
                 })
                 .catch(error => console.log(error));
             },
@@ -131,6 +134,23 @@ export default function Tracking() {
         console.log(permissionArr);
       }
     });
+  };
+
+  const getDatafromBackend = () => {
+    fetch('http://10.0.2.2:8000/api/accidentCheck', {
+      method: 'POST',
+      body: JSON.stringify({
+        lat: position.longitude,
+        lon: position.latitude,
+      }),
+      headers: {
+        'Content-type': 'application/json; charset=UTF-8',
+      },
+    })
+      .then(response => {
+        response.json().then(data => setShowAlertText(data));
+      })
+      .catch(err => console.log(err));
   };
   return (
     <SafeAreaView>
@@ -191,6 +211,23 @@ export default function Tracking() {
             </TouchableOpacity>
           )}
         </View>
+
+        {subscriptionId !== null ? (
+          <View>
+            <Text
+              style={
+                showAlertText
+                  ? TrackPageStyles.StatusOfTravelTextUnSafe
+                  : TrackPageStyles.StatusOfTravelTextSafe
+              }>
+              {showAlertText
+                ? 'You are going through accident prone zone!'
+                : 'You are going through safe area!'}
+            </Text>
+          </View>
+        ) : (
+          <></>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
