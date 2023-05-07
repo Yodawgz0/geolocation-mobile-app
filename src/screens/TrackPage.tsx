@@ -8,31 +8,31 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
+  ImageBackground,
 } from 'react-native';
 import React, {useEffect, useState} from 'react';
 import Geolocation from '@react-native-community/geolocation';
 import {TrackPageStyles} from '../Styles/TrackPageStyle';
-
+import {zoneMapping, stateMapping} from '../Constants';
 interface position {
   longitude: string;
   latitude: string;
   speed: string;
   accuracy: string;
-  city?: string;
   state?: string;
+  locality?: string;
 }
-
 export default function Tracking() {
   const [position, setPosition] = useState<position>({
     longitude: '',
     latitude: '',
     speed: '',
     accuracy: '',
-    city: '',
+    locality: '',
     state: '',
   });
   const [subscriptionId, setSubscriptionId] = useState<number | null>(null);
-  const [showAlertText, setShowAlertText] = useState<boolean>(true);
+  const [showAlertText, setShowAlertText] = useState<boolean | string>('none');
   useEffect(() => {
     return () => {
       clearWatch();
@@ -44,10 +44,7 @@ export default function Tracking() {
     true,
   ]);
 
-  useEffect(() => {
-    //console.log(8, JSON.parse(position).coords);
-    //post to 192.168.0.11
-  }, [position]);
+  useEffect(() => {}, [position]);
 
   const clearWatch = () => {
     subscriptionId !== null && Geolocation.clearWatch(subscriptionId);
@@ -58,6 +55,7 @@ export default function Tracking() {
       accuracy: '',
       speed: '',
     });
+    setShowAlertText('none');
   };
 
   const askPermission = async () => {
@@ -109,16 +107,22 @@ export default function Tracking() {
               fetch(url)
                 .then(response => response.json())
                 .then(data => {
-                  console.log('Fetched data');
                   setPosition({
                     latitude: position.coords.latitude + '',
                     longitude: position.coords.longitude + '',
                     speed: position.coords.speed + '',
                     accuracy: position.coords.accuracy + '',
                     state: data.results[0].components.state,
-                    city: data.results[0].components.city,
+                    locality:
+                      data.results[0].components.city ||
+                      data.results[0].components.county,
                   });
-                  getDatafromBackend();
+                  getDatafromBackend(
+                    data.results[0].components.state,
+                    latitude,
+                    longitude,
+                  );
+
                   console.log('data sent to backend');
                 })
                 .catch(error => console.log(error));
@@ -136,99 +140,137 @@ export default function Tracking() {
     });
   };
 
-  const getDatafromBackend = () => {
-    fetch('http://10.0.2.2:8000/api/accidentCheck', {
-      method: 'POST',
-      body: JSON.stringify({
-        lat: position.longitude,
-        lon: position.latitude,
-      }),
-      headers: {
-        'Content-type': 'application/json; charset=UTF-8',
+  const getDatafromBackend = (
+    stateCode: string,
+    latitude: string,
+    longitude: string,
+  ) => {
+    fetch(
+      `http://10.0.2.2:80/${Object.keys(zoneMapping).filter(
+        // @ts-ignore
+        (e: string) => zoneMapping[e].indexOf(stateMapping[stateCode]) !== -1,
+      )}/api/accidentCheck`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          // lat: 41.080693,
+          // lon: -86.5575,
+          lat: latitude,
+          lon: longitude,
+        }),
+        headers: {
+          'Content-type': 'application/json; charset=UTF-8',
+        },
       },
-    })
+    )
       .then(response => {
-        response.json().then(data => setShowAlertText(data));
+        response
+          .json()
+          .then(data => {
+            setShowAlertText(data.status);
+          })
+          .catch(err => console.log('Connection Error', err));
       })
       .catch(err => console.log(err));
   };
   return (
     <SafeAreaView>
-      <ScrollView>
-        <StatusBar backgroundColor="#483D8B" />
-        <View style={[TrackPageStyles.container, TrackPageStyles.horizontal]}>
-          <View style={TrackPageStyles.positionInfo}>
-            {subscriptionId !== null && position.latitude.length === 0 ? (
-              <ActivityIndicator
-                style={TrackPageStyles.loader}
-                size="large"
-                color="#0000ff"
-              />
-            ) : subscriptionId !== null ? (
-              <>
-                <Text style={TrackPageStyles.positionText}>
-                  <Text>Longitude: {position.longitude.substring(0, 8)} </Text>
-                  <Text>
-                    {'\n'}Latitude: {position.latitude.substring(0, 8)}{' '}
-                  </Text>
-                  <Text>
-                    {'\n'}Speed: {position.speed.substring(0, 4)}{' '}
-                  </Text>
-                  <Text>
-                    {'\n'}Accuracy: {position.accuracy}{' '}
-                  </Text>
-                </Text>
-                {position.city?.length && position.state?.length ? (
-                  <Text>
-                    <Text style={TrackPageStyles.StatandCitytext}>
-                      {'\n'}City: {position.city}
+      <ImageBackground
+        source={require('../assets/backimg.jpg')}
+        style={TrackPageStyles.backgroundImageStyle}>
+        <ScrollView>
+          <StatusBar
+            backgroundColor={
+              showAlertText === 'none'
+                ? 'gray'
+                : showAlertText === true
+                ? 'red'
+                : 'green'
+            }
+          />
+          <View style={[TrackPageStyles.container, TrackPageStyles.horizontal]}>
+            <View style={TrackPageStyles.positionInfo}>
+              {subscriptionId !== null && position.latitude.length === 0 ? (
+                <ActivityIndicator
+                  style={TrackPageStyles.loader}
+                  size="large"
+                  color="#0000ff"
+                />
+              ) : subscriptionId !== null ? (
+                <>
+                  <Text style={TrackPageStyles.positionText}>
+                    <Text>
+                      Longitude: {position.longitude.substring(0, 8)}{' '}
                     </Text>
-                    <Text style={TrackPageStyles.StatandCitytext}>
-                      {'\n'}State: {position.state}
+                    <Text>
+                      {'\n'}Latitude: {position.latitude.substring(0, 8)}{' '}
                     </Text>
+                    <Text>
+                      {'\n'}Speed: {position.speed.substring(0, 4)}{' '}
+                    </Text>
+                    <Text>
+                      {'\n'}Accuracy: {position.accuracy}{' '}
+                    </Text>
+                  </Text>
+                  {position.locality?.length && position.state?.length ? (
+                    <Text>
+                      <Text style={TrackPageStyles.StatandCitytext}>
+                        {'\n'}Locality: {position.locality}
+                      </Text>
+                      <Text style={TrackPageStyles.StatandCitytext}>
+                        {'\n'}State: {position.state}
+                      </Text>
+                    </Text>
+                  ) : (
+                    <View style={TrackPageStyles.StateandCityLoader}>
+                      <Text style={TrackPageStyles.StatandCitytext}>
+                        {'\n'} Locating state and city...
+                      </Text>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text style={TrackPageStyles.positionText}>
+                    Click to start!
+                  </Text>
+                </>
+              )}
+            </View>
+            {subscriptionId !== null ? (
+              <TouchableOpacity onPress={clearWatch}>
+                <Text style={TrackPageStyles.stopButton}>Stop Tracking</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={watchPosition}>
+                <Text style={TrackPageStyles.startButton}>Start Tracking</Text>
+              </TouchableOpacity>
+            )}
+            {subscriptionId !== null ? (
+              <View>
+                {showAlertText !== 'none' ? (
+                  <Text
+                    style={
+                      showAlertText
+                        ? TrackPageStyles.StatusOfTravelTextUnSafe
+                        : TrackPageStyles.StatusOfTravelTextSafe
+                    }>
+                    {showAlertText
+                      ? 'You are going through accident prone zone!'
+                      : 'You are going through safe area!'}
                   </Text>
                 ) : (
-                  <View style={TrackPageStyles.StateandCityLoader}>
-                    <Text style={TrackPageStyles.StatandCitytext}>
-                      {'\n'} Locating state and city...
-                    </Text>
-                  </View>
+                  <Text style={TrackPageStyles.StatusOfTravelTextLoading}>
+                    Inspecting your location...
+                  </Text>
                 )}
-              </>
+              </View>
             ) : (
-              <>
-                <Text style={TrackPageStyles.positionText}>Click to start</Text>
-              </>
+              <></>
             )}
           </View>
-          {subscriptionId !== null ? (
-            <TouchableOpacity onPress={clearWatch}>
-              <Text style={TrackPageStyles.stopButton}>Stop Tracking</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity onPress={watchPosition}>
-              <Text style={TrackPageStyles.startButton}>Start Tracking</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {subscriptionId !== null ? (
-          <View>
-            <Text
-              style={
-                showAlertText
-                  ? TrackPageStyles.StatusOfTravelTextUnSafe
-                  : TrackPageStyles.StatusOfTravelTextSafe
-              }>
-              {showAlertText
-                ? 'You are going through accident prone zone!'
-                : 'You are going through safe area!'}
-            </Text>
-          </View>
-        ) : (
-          <></>
-        )}
-      </ScrollView>
+        </ScrollView>
+      </ImageBackground>
     </SafeAreaView>
   );
 }
